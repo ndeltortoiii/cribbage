@@ -5,7 +5,7 @@ Created on Fri Feb 22 12:25:03 2013
 @author: movven
 """
 
-import random
+import random, copy
 
 class Card:
     """A play card. """
@@ -34,7 +34,7 @@ class Hand:
     def __init__(self):
         self.cards = []
 
-    def __init__(self, hand):
+    #def __init__(self, hand):
 
         
     def __str__(self):
@@ -55,6 +55,9 @@ class Hand:
     def give(self, card, other_hand):
         self.cards.remove(card)
         other_hand.add(card)
+
+    def numCards(self):
+        return len(self.cards)
 
 class Deck(Hand):
     """A deck of cards derived from a hand of cards"""
@@ -91,11 +94,11 @@ class Cribbage:
         pass
 
     def incrementTurn(self):
-        self.turn_idx = (self.turn_idx + 1) % n_hands
+        self.turn_idx = (self.turn_idx + 1) % self.n_hands
 
     def incrementDealer(self):
-        self.dealer_idx = (self.dealer_idx + 1) % n_hands
-        self.turn_idx = (self.dealer_idx + 1) % n_hands
+        self.dealer_idx = (self.dealer_idx + 1) % self.n_hands
+        self.turn_idx = (self.dealer_idx + 1) % self.n_hands
         
     def newGame(self, n_players=2):
         self.n_hands = n_players
@@ -103,7 +106,7 @@ class Cribbage:
         self.round_scores = [0 for i in range(self.n_hands)]
         self.team_pairs = []
         self.dealer_idx = random.randint(0, self.n_hands-1)
-        self.turn_idx = (self.dealer_idx + 1) % n_hands
+        self.turn_idx = (self.dealer_idx + 1) % self.n_hands
 
         # Determine how hands should be dealt and played based on the number of players
         if self.n_hands == 2:
@@ -140,17 +143,18 @@ class Cribbage:
         #print 'Crib:', crib
 
     def discardToCrib(self):
-        for i, hand in enumerate(self.hands):
+        for i, hand in enumerate(self.hands[self.turn_idx:] + self.hands[:self.turn_idx]):
             print 'Player {}: {}'.format( i+1, hand)
             idxs = []
             while len(idxs) != self.n_hands2crib:
-                if self.n_hands2crib = 1:
-                    ui = raw_input('Please select 1 card index to put in the crib. (e.g, 0):\n')
+                if self.n_hands2crib == 1:
+                    ui = raw_input('Please select 1 card index to put in the crib. (e.g, 5):\n')
                 else:
-                    ui = raw_input('Please select 2 card indicies to put in the crib. (e.g, 0, 3):\n')
+                    ui = raw_input('Please select 2 card indicies to put in the crib. (e.g, 1, 6):\n')
                 idxs = [int(s) for s in ui if s.isdigit()]
-            for i in idxs:
-                hand.give(hand.cards[i-1], self.crib)
+                idxs.sort(reverse=True)
+            for idx in idxs:
+                hand.give(hand.cards[idx-1], self.crib)
 
         print 'Crib:', self.crib
 
@@ -163,10 +167,97 @@ class Cribbage:
 
         # Check for nibs (2 pts for dealer)
         if self.starter.cards[0].rank == "J":
-            self.round_scores[self.dealer_idx] = self.round_scores[self.dealer_idx} + 2
+            self.round_scores[self.dealer_idx] = self.round_scores[self.dealer_idx] + 2
+
+    def getScores(self):
+        print 'Current Scores:'
+        for i in range(self.n_hands):
+            print '\tPlayer {} Score: {}'.format(i + 1, self.game_scores[i])
 
     def thePlay(self):
-        hands_cpy = copy.copy(self.hands)
-        pass
+        '''Execute 'the Play' for a game of cribbage.'''
+        orig_turn_idx = copy.copy(self.turn_idx)
+        hands_cpy = copy.deepcopy(self.hands)
+        play_hand = Hand()
+        play_total = 0
+        num_passes = 0
+        cards_left = self.n_hands*4
+        print '\nBeginning The Play:'
+        while  cards_left > 0:
+            cur_hand = hands_cpy[self.turn_idx]
+            #if cur_hand.numCards() > 0:
+            print '\tCurrent pile total {}: {}'.format(play_total, play_hand)
+            # Does the player have a card that can be played?
+            if cur_hand.numCards() == 0 or min([card.value for card in cur_hand.cards]) > (31 - play_total):
+                print '\tPlayer {}: Go'.format(self.turn_idx + 1)
+                num_passes = num_passes + 1
+            # If so, play a card
+            else:
+                print '\tPlayer {}: {}'.format(self.turn_idx + 1, cur_hand)
+                idx = -1
+                while idx == -1:
+                    ui = raw_input('\tPlease select a card to play: ')
+                    if ui[0].isdigit():
+                        idx = int(ui)
+                        if cur_hand.cards[idx - 1].value + play_total > 31:
+                            print '\t{} would put the total over 31.'.format(
+                                cur_hand.cards[idx - 1])
+                            idx = -1
+                            
+                #TODO Ensure index is valid and card is not too large
+                    
+                play_total = play_total + cur_hand.cards[idx - 1].value
+                cur_hand.give(cur_hand.cards[idx - 1], play_hand)
+                cards_left = cards_left - 1
+                # Score the play
+                # Check play hand for 15, 31, or a Go for 1, or runs/pairs
+            # If no one can play, reset play_hand
+            if num_passes == self.n_hands or play_total == 31:
+                print '\tReseting count to 0'
+                # Score the play
+                # Add score to player/team total
+                play_total = 0
+                num_passes = 0
+                play_hand = Hand()
 
+            # Next player
+            self.incrementTurn()
+                
+        print 'The Play is finished.'
+        # Reset the turn index to prone
+        self.turn_idx = orig_turn_idx
+
+    def theShow(self):
+        '''Execute 'the Show' for a game of cribbage.'''
+        print "\nBeginning the Show:"
+        for i in range(self.n_hands):
+            print "\tPlayer {}'s Hand: {} {}".format(self.turn_idx + 1, self.hands[self.turn_idx], self.starter)
+            # Score the hand
+            # Add score to player/team total
+            print '\tScore:', 0
+            if self.turn_idx == self.dealer_idx:
+                print "\tPlayer {}'s Crib: {} {}".format(self.turn_idx + 1, self.crib, self.starter)
+                # Score the hand
+                # Add score to player/team total
+                print '\tScore:', 0
+            self.incrementTurn()
+                
+        print 'The Show is finished.'
+        
+# Main function for running a game of cribbage
+def main():
+    game = Cribbage()
+    num_players = 2
+    game.newGame(num_players)
+    print 'Started a new game with {} players.'.format(num_players)
+    print 'Player {} is dealer.'.format(game.dealer_idx + 1)
+    game.discardToCrib()
+    game.flipStarter()
+    game.thePlay()
+    game.theShow()
+    game.getScores()
+
+# Standard boilerplate code
+if __name__ == '__main__':
+    main()
 
