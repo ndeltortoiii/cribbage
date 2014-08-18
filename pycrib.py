@@ -5,18 +5,18 @@ Created on Fri Feb 22 12:25:03 2013
 @author: movven
 """
 
-import random, copy
+import random, copy, pdb
 
 class Card:
     """A play card. """
-    heart = u"\u2661"
-    diamo = u"\u2662"
-    spade = u"\u2660"
-    club = u"\u2664"
+    HEART = u"\u2661"
+    DIAMO = u"\u2662"
+    SPADE = u"\u2660"
+    CLUB = u"\u2664"
     
-    SUITS = [heart, spade, diamo, club]
+    SUITS = [HEART, SPADE, DIAMO, CLUB]
     RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
-    VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9 , 10, 10, 10, 10]
+    VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10]
     
     val_dict = dict(zip(RANKS, VALUES))
     
@@ -24,8 +24,9 @@ class Card:
         self.rank = rank
         self.suit = suit
         self.value = self.val_dict[rank]
+        self.order = self.RANKS.index(rank) + 1
     
-    def __str__(self):
+    def __repr__(self):
         return self.rank + self.suit.encode('utf-8')
         
 class Hand:
@@ -35,16 +36,14 @@ class Hand:
         self.cards = []
 
     #def __init__(self, hand):
-
+    #    self.cards = hand.cards
         
-    def __str__(self):
-        if self.cards:
-            ret = ""
-            for card in self.cards:
-                ret += str(card) + " "
-        else:
-            ret = "<empty>"
-        return ret
+    def __repr__(self):
+        return repr(self.cards)
+
+    def __iter__(self):
+        for card in self.cards:
+            yield card
     
     def clear(self):
         self.cards = []
@@ -59,6 +58,55 @@ class Hand:
     def numCards(self):
         return len(self.cards)
 
+    def get_runs(self, min_len=3):
+        '''Returns a list of tuples for any suit runs longer than "min_len"'''
+        scards = sorted(self.cards, key=lambda c: c.order)
+        runs = []
+        rs, re, o_prev = None, None, None
+        for c in scards:
+            if rs is None:
+                rs = c.order
+            elif c.order <= o_prev + 1:
+                re = c.order
+            else:
+                if re is not None and (re - rs + 1) >= min_len:
+                    runs.append((rs, re))
+                rs, re = c.order, None
+            o_prev = c.order
+        return runs
+
+    def get_pairs(self, min_num=2):
+        '''Returns a dict of order(key)/number(value) of pair occurences'''
+        pair_cnt = {}
+        for c in self.cards:
+            o = c.order
+            if o in pair_cnt:
+                pair_cnt[o] += 1
+            else:
+                pair_cnt[o] = 1
+        return {o:cnt for o, cnt in pair_cnt.items() if cnt >= min_num}
+
+    def get_15s(self):
+        pass
+
+    def test_runs_and_pairs(self):
+        h = Hand()
+        h.add(Card("3", Card.HEART))
+        h.add(Card("9", Card.DIAMO))
+        h.add(Card("7", Card.HEART))
+        h.add(Card("10", Card.CLUB))
+        h.add(Card("J", Card.CLUB))
+        h.add(Card("A", Card.HEART))
+        h.add(Card("2", Card.HEART))
+        h.add(Card("2", Card.SPADE))
+        h.add(Card("2", Card.CLUB))
+        h.add(Card("4", Card.HEART))
+        h.add(Card("6", Card.HEART))
+        h.add(Card("7", Card.SPADE))
+        h.add(Card("K", Card.DIAMO))
+        assert(h.get_pairs() == {2: 3, 7: 2})
+        assert(h.get_runs() == [(1, 4), (9, 11)])
+
 class Deck(Hand):
     """A deck of cards derived from a hand of cards"""
 #    def __init__(self):
@@ -67,8 +115,8 @@ class Deck(Hand):
     def __init__(self):
         Hand.__init__(self)
     
-    def __str__(self):
-        return "[%s]" % ", ".join( (str(card) for card in self.cards))
+    def __repr__(self):
+        return repr(self.cards)
 
     def populate(self):
         for suit in Card.SUITS:
@@ -127,10 +175,7 @@ class Cribbage:
         self.deck.shuffle()
 
         # Prep the hands and the crib
-        self.hands = []
-        for i in range(self.n_hands):
-            self.hands.append(Hand())
-
+        self.hands = [Hand() for i in xrange(self.n_hands)]
         self.crib = Hand()
 
         # Deal the cards
@@ -144,7 +189,7 @@ class Cribbage:
 
     def discardToCrib(self):
         for i, hand in enumerate(self.hands[self.turn_idx:] + self.hands[:self.turn_idx]):
-            print 'Player {}: {}'.format( i+1, hand)
+            print 'Player {}: {}'.format(i + 1, hand)
             idxs = []
             while len(idxs) != self.n_hands2crib:
                 if self.n_hands2crib == 1:
